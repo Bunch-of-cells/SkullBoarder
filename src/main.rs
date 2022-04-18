@@ -191,7 +191,7 @@ fn create_embed<'a>(e: &'a mut CreateEmbed, msg: &Message) -> &'a mut CreateEmbe
 
 #[async_trait]
 impl EventHandler for SkullBoarder {
-    async fn message(&self, ctx: Context, mut msg: Message) {
+    async fn message(&self, ctx: Context, msg: Message) {
         if let Some(("!setskull", times)) = msg.content.split_once(char::is_whitespace) {
             if let Some(member) = &msg.member {
                 for role in &member.roles {
