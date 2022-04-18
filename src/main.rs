@@ -18,7 +18,8 @@ const ULTRA_SKULL: &str = "☠️";
 
 struct SkullBoarder {
     skull_count: Mutex<u64>,
-    skull_boards_msgs: Mutex<HashMap<u64, Message>>,
+    /// MessageId
+    skull_boards_msgs: Mutex<HashMap<u64, u64>>,
     channel: Mutex<Option<ChannelId>>,
 }
 
@@ -31,6 +32,7 @@ impl SkullBoarder {
         let channel = if let Some(channel) = *self.channel.lock().await {
             channel
         } else {
+            println!("No channel set");
             return;
         };
 
@@ -43,6 +45,7 @@ impl SkullBoarder {
         };
 
         if matches!(reaction.user_id, Some(uid) if uid == msg.author.id) {
+            println!("Self skulling");
             return;
         }
 
@@ -97,7 +100,15 @@ impl SkullBoarder {
         {
             reaction
         } else {
-            if let Some(message) = self.skull_boards_msgs.lock().await.remove(msg.id.as_u64()) {
+            if let Some(message_id) = self.skull_boards_msgs.lock().await.remove(msg.id.as_u64()) {
+                let message = match ctx.http.get_message(channel.0, message_id).await {
+                    Ok(message) => message,
+                    Err(why) => {
+                        println!("Error fetching message: {:?}", why);
+                        return;
+                    }
+                };
+
                 if let Err(why) = message.delete(&ctx.http).await {
                     println!("Error deleting message: {:?}", why);
                 }
@@ -116,7 +127,15 @@ impl SkullBoarder {
 
         let mut msgs = self.skull_boards_msgs.lock().await;
 
-        if let Some(message) = msgs.get_mut(msg.id.as_u64()) {
+        if let Some(&mut message_id) = msgs.get_mut(msg.id.as_u64()) {
+            let mut message = match ctx.http.get_message(channel.0, message_id).await {
+                Ok(message) => message,
+                Err(why) => {
+                    println!("Error fetching message: {:?}", why);
+                    return;
+                }
+            };
+
             if let Err(why) = message
                 .edit(&ctx.http, |m| {
                     m.content(new_msg).embed(|e| create_embed(e, &msg))
@@ -133,10 +152,10 @@ impl SkullBoarder {
                 .await
             {
                 Ok(new_msg) => {
-                    let _ = new_msg
+                    let _ = msg
                         .react(&ctx.http, ReactionType::Unicode(ULTRA_SKULL.to_string()))
                         .await;
-                    msgs.insert(*msg.id.as_u64(), new_msg);
+                    msgs.insert(*msg.id.as_u64(), new_msg.id.0);
                 }
                 Err(why) => {
                     println!("Error sending message: {:?}", why);
@@ -172,7 +191,7 @@ fn create_embed<'a>(e: &'a mut CreateEmbed, msg: &Message) -> &'a mut CreateEmbe
 
 #[async_trait]
 impl EventHandler for SkullBoarder {
-    async fn message(&self, ctx: Context, msg: Message) {
+    async fn message(&self, ctx: Context, mut msg: Message) {
         if let Some(("!setskull", times)) = msg.content.split_once(char::is_whitespace) {
             if let Some(member) = &msg.member {
                 for role in &member.roles {
@@ -226,7 +245,7 @@ async fn main() {
 
     let mut client = Client::builder(&token)
         .event_handler(SkullBoarder {
-            skull_count: Mutex::new(4),
+            skull_count: Mutex::new(1),
             skull_boards_msgs: Mutex::new(HashMap::new()),
             channel: Mutex::new(None),
         })
