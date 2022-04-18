@@ -4,7 +4,7 @@ SkullBoard's your skully messages 💀💀
 <img src="ss.png"></img>
 
 ## Commands
-### !setskull <number>
+### !setskull \<number\>
   sets the minimum number of skulls required on a message to go to skullboard
 
 ### !setchannel
